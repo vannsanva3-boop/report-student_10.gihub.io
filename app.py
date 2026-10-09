@@ -7,8 +7,12 @@ import openpyxl
 from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
 from openpyxl.drawing.image import Image as ExcelImage
 
-app = Flask(__name__)
+# កំណត់ឱ្យស្គាល់ HTML និង Files នៅខាងក្រៅ
+app = Flask(__name__, template_folder='.', static_folder='.', static_url_path='/static')
 app.secret_key = "grade10_math_tongpo_secret_2026"
+
+# បង្កើត Database ស្វ័យប្រវត្តិតាំងពីចាប់ផ្តើម
+init_db()
 
 def get_grade(total):
     if total >= 95: return "A"
@@ -20,13 +24,23 @@ def get_grade(total):
 
 @app.before_request
 def check_auth():
-    if request.path.startswith('/static') or request.path in ['/login']:
+    if (request.path.startswith('/static') or 
+        request.path in ['/login'] or 
+        request.path.endswith(('.png', '.jpg', '.jpeg', '.js', '.css', '.ico'))):
         return None
+        
     if 'user' not in session:
         if request.path.startswith('/api/'):
             return jsonify({"error": "Unauthorized"}), 401
         return redirect(url_for('login'))
 
+@app.route('/<filename>')
+def serve_root_files(filename):
+    if os.path.exists(filename):
+        return send_file(filename)
+    return "Not Found", 404
+
+# ----------------- LOGIN ----------------- #
 @app.route("/login", methods=["GET", "POST"])
 def login():
     if request.method == "GET":
@@ -35,6 +49,13 @@ def login():
 
     username = request.form.get("username", "").strip()
     password = request.form.get("password", "").strip()
+
+    # អនុញ្ញាតឱ្យ chiva / 123 ចូលបានភ្លាមៗ ១០០%
+    if username == "chiva" and password == "123":
+        session['user'] = "chiva"
+        session['fullname'] = "វ៉ាន់ ជីវ៉ា"
+        return redirect(url_for('index'))
+
     db = get_db()
     user = db.execute("SELECT * FROM users WHERE username = ? AND password = ?", (username, password)).fetchone()
     if user:
@@ -173,7 +194,7 @@ def delete_student(sid):
     db.commit()
     return jsonify({"success": True})
 
-# ----------------- REAL EXCEL EXPORT (Font Battambang សម្រាប់ឈ្មោះសិស្ស) ----------------- #
+# ----------------- REAL EXCEL EXPORT ----------------- #
 @app.get("/export/excel")
 def export_real_excel():
     db = get_db()
@@ -200,8 +221,6 @@ def export_real_excel():
     font_bold = Font(name="Khmer OS Siemreap", size=10, bold=True, color="000000")
     font_title_khmer = Font(name="Khmer OS Muol Light", size=11, bold=True, color="000000")
     font_red_bold = Font(name="Khmer OS Siemreap", size=10, bold=True, color="FF0000")
-    
-    # Font Battambang សម្រាប់ឈ្មោះសិស្ស
     font_battambang_student = Font(name="Battambang", size=10, bold=True, color="000000")
 
     fill_orange_header = PatternFill(start_color="C55A11", end_color="C55A11", fill_type="solid")
@@ -217,7 +236,7 @@ def export_real_excel():
         bottom=Side(style='thin', color='7F7F7F')
     )
 
-    logo_path = os.path.join("static", "logo.png")
+    logo_path = "logo.png" if os.path.exists("logo.png") else os.path.join("static", "logo.png")
     if os.path.exists(logo_path):
         try:
             img = ExcelImage(logo_path)
@@ -237,8 +256,7 @@ def export_real_excel():
     ws['E2'].font = font_title_khmer
     ws['E2'].alignment = Alignment(horizontal='center', vertical='center')
 
-    # បញ្ចូលរូបក្បាច់គម្ពីរក្នុង Excel (Cell F3)
-    divider_path = os.path.join("static", "divider.png")
+    divider_path = "divider.png" if os.path.exists("divider.png") else os.path.join("static", "divider.png")
     if os.path.exists(divider_path):
         try:
             d_img = ExcelImage(divider_path)
@@ -264,7 +282,6 @@ def export_real_excel():
     ws['E8'].font = Font(name="Khmer OS Siemreap", size=10, bold=True, color="002060", underline="single")
     ws['E8'].alignment = Alignment(horizontal='center', vertical='center')
 
-    # Merge Row 9: ផ្នែកខាងឆ្វេង B9:D9 គឺ «របាយការណ៍ពិន្ទុគិតជា %»
     ws.merge_cells('B9:D9')
     ws['B9'] = "របាយការណ៍ពិន្ទុគិតជា %"
     for col_idx in range(2, 5):
@@ -325,7 +342,6 @@ def export_real_excel():
 
         ws.cell(row=current_row, column=2, value=idx + 1).alignment = Alignment(horizontal='center')
         
-        # ឈ្មោះសិស្សប្រើ Font Battambang
         name_cell = ws.cell(row=current_row, column=3, value=s["name"])
         name_cell.alignment = Alignment(horizontal='left')
         name_cell.font = font_battambang_student
@@ -410,5 +426,4 @@ def export_real_excel():
     )
 
 if __name__ == "__main__":
-    init_db()
     app.run(debug=True, port=5000)
