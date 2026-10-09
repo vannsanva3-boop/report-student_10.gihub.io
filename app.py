@@ -33,7 +33,19 @@ def check_auth():
         if request.path.startswith('/api/'):
             return jsonify({"error": "Unauthorized"}), 401
         return redirect(url_for('login'))
+# 👉 បន្ថែម Route នេះដើម្បីឱ្យស្គាល់ main.js គ្រប់ទីតាំងទាំងអស់
+@app.route('/static/js/main.js')
+@app.route('/static/main.js')
+@app.route('/js/main.js')
+@app.route('/main.js')
+def serve_main_js():
+    return send_file('main.js', mimetype='application/javascript')
 
+@app.route('/<filename>')
+def serve_root_files(filename):
+    if os.path.exists(filename):
+        return send_file(filename)
+    return "Not Found", 404
 @app.route('/<filename>')
 def serve_root_files(filename):
     if os.path.exists(filename):
